@@ -1,10 +1,13 @@
 import streamlit as st
-import joblib
+import pickle
 import numpy as np
 
-# Load preprocessor and model
-preprocessor = joblib.load('preprocessor.pkl')
-model = joblib.load('knn_best_tuned_model.pkl')
+# Load model and preprocessor using pickle
+with open('preprocessor.pkl', 'rb') as f:
+    preprocessor = pickle.load(f)
+
+with open('knn_best_tuned_model.pkl', 'rb') as f:
+    model = pickle.load(f)
 
 st.set_page_config(page_title="Heart Attack Risk Predictor", layout="centered")
 st.title("❤️ Heart Attack Risk Prediction App")
