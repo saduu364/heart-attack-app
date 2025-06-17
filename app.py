@@ -1,49 +1,66 @@
-
 import streamlit as st
-import pickle
 import numpy as np
+import pickle
+import pandas as pd
 
-# Load model and preprocessor using pickle
-with open('preprocessor.pkl', 'rb') as f:
-    preprocessor = pickle.load(f)
+# Load the model and preprocessor
+@st.cache_resource
+def load_model_and_preprocessor():
+    with open("knn_best_tuned_model (1).pkl", "rb") as model_file:
+        model = pickle.load(model_file)
+    with open("preprocessor (2).pkl", "rb") as preprocessor_file:
+        preprocessor = pickle.load(preprocessor_file)
+    return model, preprocessor
 
-with open('knn_best_tuned_model.pkl', 'rb') as f:
-    model = pickle.load(f)
+model, preprocessor = load_model_and_preprocessor()
 
-st.set_page_config(page_title="Heart Attack Risk Predictor", layout="centered")
-st.title("❤️ Heart Attack Risk Prediction App")
-
-st.write("Enter patient details below:")
-
-# Define user input fields
-age = st.slider("Age", 20, 100, 50)
-sex = st.selectbox("Sex (0 = female, 1 = male)", [0, 1])
-cp = st.selectbox("Chest Pain Type (0–3)", [0, 1, 2, 3])
-trestbps = st.slider("Resting Blood Pressure", 80, 200, 120)
-chol = st.slider("Serum Cholesterol (mg/dl)", 100, 600, 200)
-fbs = st.selectbox("Fasting Blood Sugar > 120 mg/dl? (1 = True, 0 = False)", [0, 1])
-restecg = st.selectbox("Resting ECG (0–2)", [0, 1, 2])
-thalach = st.slider("Max Heart Rate Achieved", 60, 220, 150)
-exang = st.selectbox("Exercise Induced Angina (1 = yes, 0 = no)", [0, 1])
-oldpeak = st.number_input("ST Depression Induced by Exercise", value=1.0, step=0.1)
-slope = st.selectbox("Slope of ST Segment (0–2)", [0, 1, 2])
-ca = st.selectbox("Number of Major Vessels (0–3)", [0, 1, 2, 3])
-thal = st.selectbox("Thalassemia (1 = normal, 2 = fixed defect, 3 = reversable defect)", [1, 2, 3])
-
-# Collect input into a feature vector
-input_data = np.array([[age, sex, cp, trestbps, chol, fbs, restecg, thalach,
-                        exang, oldpeak, slope, ca, thal]])
-
-# Predict button
-if st.button("Predict"):
-    # Preprocess the input
-    input_transformed = preprocessor.transform(input_data)
-    
-    # Make prediction
-    prediction = model.predict(input_transformed)
-
-    # Display result
-    if prediction[0] == 1:
-        st.error("⚠️ High Risk of Heart Attack!")
+# Try to infer feature names from preprocessor (assuming it's a Pipeline or ColumnTransformer)
+try:
+    # If it's a Pipeline
+    if hasattr(preprocessor, 'named_transformers_'):
+        feature_names = preprocessor.feature_names_in_
+    elif hasattr(preprocessor, 'feature_names_in_'):
+        feature_names = preprocessor.feature_names_in_
     else:
-        st.success("✅ Low Risk of Heart Attack.")
+        st.error("Could not determine feature names from preprocessor.")
+        st.stop()
+except Exception as e:
+    st.error(f"Error retrieving feature names: {e}")
+    st.stop()
+
+st.title("🔍 KNN Model Predictor - Manual Input")
+
+st.markdown("Please enter the values for each feature below:")
+
+# Collect feature values from the user
+input_data = {}
+
+with st.form("feature_form"):
+    for feature in feature_names:
+        # You can customize widget types per feature based on your data schema
+        value = st.text_input(f"{feature}", "")
+        input_data[feature] = value
+    submitted = st.form_submit_button("Predict")
+
+if submitted:
+    try:
+        # Convert to DataFrame
+        input_df = pd.DataFrame([input_data])
+
+        # Convert numeric columns to float if possible
+        for col in input_df.columns:
+            try:
+                input_df[col] = pd.to_numeric(input_df[col])
+            except ValueError:
+                pass  # Leave as is (for categorical columns)
+
+        # Preprocess input
+        processed_input = preprocessor.transform(input_df)
+
+        # Predict
+        prediction = model.predict(processed_input)[0]
+
+        st.success(f"✅ Prediction: {prediction}")
+
+    except Exception as e:
+        st.error(f"❌ Prediction failed: {e}")
